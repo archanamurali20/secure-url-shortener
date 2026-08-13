@@ -31,13 +31,13 @@ def get_health_check():
 @app.post("/links",response_model=GetCode)
 def assign_code(long_url: UrlAPI, session: Session = Depends(get_session)):
     table_entry = UrlTable(long_url=str(long_url.long_url))
-    session.add(table_entry)
+    session.add(table_entry)            
     session.commit()
     session.refresh(table_entry)
     return table_entry
 
 @app.get("/links/{code}", response_model=PostURL, responses={404:{"description":"No Link exists for this code"}})   
-def get_long_url(code: int, session:Session=Depends(get_session)):
+def get_long_url(code: str, session:Session=Depends(get_session)):
     long_url=session.exec(select(UrlTable).where(UrlTable.code==code)).first()
     if long_url is None:
         raise HTTPException(status_code=404, detail= "Code Not Found")

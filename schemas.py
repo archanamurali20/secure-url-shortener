@@ -1,22 +1,26 @@
 from pydantic import BaseModel, HttpUrl
 from sqlmodel  import Field, SQLModel
-from random import randint
+import secrets
+import string
 
 
 def code_generator():
-        return randint(1,1000000)
+        sequence = string.ascii_letters + string.digits
+        code = ''.join(secrets.choice(sequence) for _ in range(7))
+        return code
+
 
 class UrlAPI(SQLModel):
     long_url: HttpUrl
 
 
 class UrlTable(SQLModel, table=True):
-    id: int = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     long_url:str = Field(index=True)
-    code:int=Field(default_factory=code_generator, unique=True, index=True)
+    code:str=Field(default_factory=code_generator, unique=True, index=True)
 
 class GetCode(SQLModel):
-    code:int
+    code:str
 
 class PostURL(SQLModel):
      long_url:str
