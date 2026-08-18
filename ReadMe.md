@@ -35,6 +35,13 @@ A URL shortener API built as a vehicle for practising secure backend development
     - Per-user salts, so identical passwords produce different hashes and precomputed rainbow tables are useless.
     - Deliberately slow parameters — the cost per hash is negligible for one login but makes brute-forcing impractical.
 6. The password hash is excluded from API responses by the response model
+7. Authentication
+    - Signing key read from environment variables, never committed; .env gitignored with a .env.example documenting required config
+    - Token expiry (30 min) bounds the damage window if a token leaks
+    - algorithms pinned explicitly on decode, preventing algorithm-substitution attacks such as alg: none
+    - Generic 401 for both wrong password and unknown email, so responses don't reveal which emails are registered
+    - Dummy hash verified on the unknown-email path so response timing doesn't leak registration status either
+    - Unexpired, validly-signed tokens still rejected if the user no longer exists
 
 
 ## Known Limitations
