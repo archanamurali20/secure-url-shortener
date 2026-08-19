@@ -11,21 +11,6 @@ def code_generator():
         return code
 
 
-class UrlAPI(SQLModel):
-    long_url: HttpUrl
-
-
-class UrlTable(SQLModel, table=True):
-    id: int | None = Field(default=None, primary_key=True)
-    long_url:str = Field(index=True)
-    code:str=Field(unique=True, index=True)
-
-class GetCode(SQLModel):
-    code:str
-
-class PostURL(SQLModel):
-     long_url:str
-
 # User Table
 
 class UserBase(SQLModel):
@@ -39,6 +24,27 @@ class UserRequest(UserBase):
 class UserTable(UserBase, table=True):
      id: int | None = Field(default=None, primary_key=True)
      hashed_password : str 
+
+# Urls
+class UrlAPI(SQLModel):
+    long_url: HttpUrl
+
+class UrlTable(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    long_url:str = Field(index=True)
+    code:str=Field(unique=True, index=True)
+    owner_id: int = Field(foreign_key="usertable.id")
+
+class GetCode(SQLModel):
+    code:str
+
+class PostURL(SQLModel):
+     long_url:str
+
+class GetAllLinks(SQLModel):
+     long_url:str
+     code: str
+
 
 # Token
 class Token(BaseModel):

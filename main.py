@@ -1,12 +1,12 @@
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta, timezone
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlmodel import SQLModel, Session, create_engine, select
 from schemas import (
     GetCode, UrlTable, UrlAPI,PostURL,
     UserBase, UserRequest, UserTable,
-    Token, TokenData
+    Token, TokenData, GetAllLinks
 
 )
 import jwt
@@ -17,6 +17,9 @@ import secrets
 from config import user_access
 from typing  import Annotated
 from jwt.exceptions import InvalidTokenError
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 
 sqlite_file_name = "database.db"
@@ -44,8 +47,10 @@ def get_password_hash(password):
 def verify_password(password, hashed_password):
     return password_hash.verify(password, hashed_password)
 
-
+limiter = Limiter(key_func=get_remote_address)
 app=FastAPI(lifespan=createdb_and_tables)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
@@ -104,10 +109,10 @@ def get_health_check():
     }
 
 @app.post("/links",response_model=GetCode)
-def assign_code(long_url: UrlAPI, session: Session = Depends(get_session), current_user: UserTable = Depends(get_current_user)):   
+@limiter.limit("10/minute")
+def assign_code(request :Request, long_url: UrlAPI, session: Session = Depends(get_session), current_user: UserTable = Depends(get_current_user)):   
     while True:
-        table_entry = UrlTable(long_url=str(long_url.long_url))
-        table_entry.code = code_generator()
+        table_entry = UrlTable(long_url=str(long_url.long_url), code=code_generator(), owner_id= current_user.id)        
         try:
             session.add(table_entry)            
             session.commit()
@@ -117,16 +122,18 @@ def assign_code(long_url: UrlAPI, session: Session = Depends(get_session), curre
             session.rollback()
 
 
-@app.get("/links/{code}", response_model=PostURL, responses={404:{"description":"No Link exists for this code"}})   
-def get_long_url(code: str, session:Session=Depends(get_session)):
+@app.get("/links/{code}", response_model=PostURL, responses={404:{"description":"No Link exists for this code"}})  
+@limiter.limit("50/minute") 
+def get_long_url(request :Request, code: str, session:Session=Depends(get_session)):
     long_url=session.exec(select(UrlTable).where(UrlTable.code==code)).first()
     if long_url is None:
         raise HTTPException(status_code=404, detail= "Code Not Found")
     return long_url
 
-#This is to add a new user to the database
-@app.post("/create-user", response_model=UserBase)
-def add_user(user_input :UserRequest, session : Session=Depends(get_session)):
+#To add a new user to the database
+@app.post("/auth/register", response_model=UserBase)
+@limiter.limit("5/hour")
+def add_user(request: Request, user_input :UserRequest, session : Session=Depends(get_session)):
     new_user = UserTable.model_validate(user_input, update={'hashed_password': get_password_hash(user_input.password)})
     try:
         session.add(new_user)
@@ -137,9 +144,10 @@ def add_user(user_input :UserRequest, session : Session=Depends(get_session)):
         raise HTTPException(status_code=409, detail= 'This email ID already exists')
     return new_user
 
-#This is to check credentials and generate token
+#To check credentials and generate token
 @app.post("/auth/login")
-def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session : Session=Depends(get_session))->Token:
+@limiter.limit("5/minute")
+def login_for_access_token(request: Request, form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session : Session=Depends(get_session))->Token:
     user = authenticate_user(form_data.username,form_data.password,session)
     if not user:
         raise HTTPException(
@@ -151,6 +159,31 @@ def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depen
     access_token= create_access_token(data={"sub":user.email}, expires_delta=access_token_expires)
 
     return Token(access_token=access_token, token_type="bearer")
+
+@app.delete("/links/{code}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("5/minute")
+def delete_links(request : Request, code : str, session: Session=Depends(get_session), current_user : UserTable = Depends(get_current_user)):
+    code_in_db = session.exec(select(UrlTable).where(UrlTable.code==code)).first()
+    if code_in_db is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Code not found",
+            )
+    if(code_in_db.owner_id!=current_user.id):
+        
+        raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail = "Not authorized to perform this action",
+            )
+    session.delete(code_in_db)
+    session.commit()
+
+@app.get("/links", response_model=list[GetAllLinks])
+@limiter.limit("50/minute") 
+def get_all_links_for_current_user(request: Request, current_user: UserTable = Depends(get_current_user), session : Session = Depends(get_session)):
+    all_links = session.exec(select(UrlTable).where(UrlTable.owner_id==current_user.id)).all()
+    return all_links
+    
 
 
 
