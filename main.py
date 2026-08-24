@@ -113,7 +113,7 @@ def assign_code(request :Request, long_url: UrlAPI, session: Session = Depends(g
             session.add(table_entry)            
             session.commit()
             session.refresh(table_entry)
-            return GetCode(code=table_entry.code,short_url=settings.BASE_URL+'/' +table_entry.code)
+            return GetCode(code=table_entry.code,short_url=settings.BASE_URL + "/links/" + table_entry.code)
         except IntegrityError:
             session.rollback()
     raise HTTPException(

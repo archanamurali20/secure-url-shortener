@@ -7,7 +7,7 @@ def test_create_code(client: TestClient, auth_header):
     assert "short_url" in response.json()
     code = response.json()["code"]
     short_url = response.json()["short_url"]
-    assert short_url.endswith("/" + code)
+    assert short_url.endswith("/links/" + code)
 
 def test_delete_code(client: TestClient, auth_header):
     # First, create a code to delete
