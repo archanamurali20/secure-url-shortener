@@ -183,8 +183,3 @@ def get_all_links_for_current_user(request: Request, current_user: UserTable = D
     all_links = session.exec(select(UrlTable).where(UrlTable.owner_id==current_user.id)).all()
     return all_links
     
-
-
-
-
-

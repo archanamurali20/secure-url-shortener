@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     DATABASE_URL:str
     BASE_URL:str
+    TEST_DATABASE_URL:str
 
     @field_validator("BASE_URL")
     @classmethod
