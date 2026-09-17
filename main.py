@@ -22,7 +22,11 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-engine=create_engine(settings.DATABASE_URL, echo=True)
+engine=create_engine(settings.DATABASE_URL, 
+                     echo=False, 
+                     pool_pre_ping=True, 
+                     pool_recycle=300,
+                     )
 
 password_hash = PasswordHash.recommended()
 dummy_hash=password_hash.hash("dummypassword")

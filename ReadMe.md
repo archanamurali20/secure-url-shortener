@@ -6,7 +6,7 @@ A URL shortener API built as a vehicle for practising secure backend development
 
 https://secure-url-shortener-qyvm.onrender.com/docs
 
-Note: The first request may take up to 50 seconds while the free instance wakes from idle.
+Note: The first request may take up to a minute as the app and the database wakes on demand.
 
 ## Tech Stack
 - Python
