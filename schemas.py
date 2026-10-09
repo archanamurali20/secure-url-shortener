@@ -6,11 +6,11 @@ from sqlmodel import Field, SQLModel
 # User Table
 
 class UserBase(SQLModel):
-     name: str = Field(index=True)
+     name: str = Field(index=True, max_length=100)
      email: EmailStr = Field(index=True, unique=True)
 
 class UserRequest(UserBase):
-     password: str = Field(min_length=8)
+     password: str = Field(min_length=8, max_length=100)
 
 
 class UserTable(UserBase, table=True):
@@ -19,7 +19,7 @@ class UserTable(UserBase, table=True):
 
 # Urls
 class UrlAPI(SQLModel):
-    long_url: HttpUrl
+    long_url: HttpUrl = Field(max_length=2048)
 
     @field_validator("long_url")
     @classmethod
@@ -61,8 +61,8 @@ class UrlAPI(SQLModel):
 
 class UrlTable(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    long_url:str
-    code:str=Field(unique=True, index=True)
+    long_url:str = Field(max_length=2048)
+    code:str=Field(unique=True, index=True, max_length=7)
     owner_id: int = Field(foreign_key="usertable.id",  index=True)
 
 class GetCode(SQLModel):

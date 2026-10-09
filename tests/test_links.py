@@ -28,9 +28,13 @@ def test_delete_code(client: TestClient, auth_header):
     assert delete_response.status_code == 401
 
 def test_delete_non_existent_code(client: TestClient, auth_header):
-    non_existent_code = "nonexistentcode"
+    non_existent_code = "zzzzzzz"
     delete_response = client.delete(f"/links/{non_existent_code}", headers=auth_header)
     assert delete_response.status_code == 404
+    
+def test_malformed_code_rejected(client: TestClient, auth_header):
+    response = client.delete("/links/nonexistentcode", headers=auth_header)
+    assert response.status_code == 422
 
 def test_delete_code_different_user(client: TestClient, auth_header):
 

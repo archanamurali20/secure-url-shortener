@@ -1,8 +1,8 @@
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta, timezone
-from fastapi import Depends, FastAPI, HTTPException, status, Request
+from fastapi import Depends, FastAPI, HTTPException, Path, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from sqlmodel import SQLModel, Session, create_engine, select
 from schemas import (
     GetCode, UrlTable, UrlAPI,
@@ -49,6 +49,19 @@ def verify_password(password, hashed_password):
 
 limiter = Limiter(key_func=get_remote_address)
 app=FastAPI(lifespan=createdb_and_tables)
+@app.middleware("http")
+async def limit_body_size(request: Request, call_next):
+    content_length = request.headers.get("Content-Length")
+    if content_length is None:
+        return await call_next(request)
+
+    if int(content_length) > settings.MAX_BODY_BYTES:
+        return JSONResponse(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            content={"detail": "Content too large"}
+            )  
+    return await call_next(request)
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -127,7 +140,7 @@ def assign_code(request :Request, long_url: UrlAPI, session: Session = Depends(g
 
 @app.get("/links/{code}", response_class=RedirectResponse, responses={404:{"description":"No Link exists for this code"}},status_code=status.HTTP_302_FOUND )  
 @limiter.limit("50/minute") 
-def get_long_url(request :Request, code: str, session:Session=Depends(get_session)):
+def get_long_url(request :Request, code: str = Path(min_length=7, max_length=7, pattern="^[A-Za-z0-9]{7}$"), session:Session=Depends(get_session)):
     url_row=session.exec(select(UrlTable).where(UrlTable.code==code)).first()
     if url_row is None:
         raise HTTPException(status_code=404, detail= "Code Not Found")
@@ -165,7 +178,7 @@ def login_for_access_token(request: Request, form_data: Annotated[OAuth2Password
 
 @app.delete("/links/{code}", status_code=status.HTTP_204_NO_CONTENT)
 @limiter.limit("30/minute")
-def delete_links(request : Request, code : str, session: Session=Depends(get_session), current_user : UserTable = Depends(get_current_user)):
+def delete_links(request : Request, code : str =  Path(min_length=7, max_length=7, pattern="^[A-Za-z0-9]{7}$"), session: Session=Depends(get_session), current_user : UserTable = Depends(get_current_user)):
     code_in_db = session.exec(select(UrlTable).where(UrlTable.code==code)).first()
     if code_in_db is None:
         raise HTTPException(
