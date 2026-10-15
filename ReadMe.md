@@ -55,9 +55,10 @@ Note: The first request may take up to a minute as the app and the database wake
     - Per-user salts, so identical passwords produce different hashes and precomputed rainbow tables are useless.
     - Deliberately slow parameters — the cost per hash is negligible for one login but makes brute-forcing impractical.
     - The password hash is excluded from API responses by the response model.
+    - Length bounded at both ends, 8 to 128 (OWASP). This is enforced when a password is set and deliberately not at login, so raising the policy later cannever lock out an existing account.
 5. Authentication
     - Signing key read from environment variables, never committed; `.env` gitignored with a `.env.example` documenting required config.
-    - Token expiry (30 min) bounds the damage window if a token leaks.
+    - Token expiry (30 min) bounds the damage window if a token leaks. Decode requires exp and sub, so a token issued without an expiry is rejected rather than valid forever.
     - `algorithms` pinned explicitly on decode, preventing algorithm-substitution attacks such as `alg: none`.
     - Generic 401 for both wrong password and unknown email, so responses don't reveal which emails are registered.
     - The unknown-email path also verifies against a dummy hash, so both paths pay the same Argon2 cost. Without it, a fast rejection would mark the email as unregistered regardless of the matching response body.
@@ -74,7 +75,10 @@ Note: The first request may take up to a minute as the app and the database wake
     - Exceeding a limit returns 429 rather than failing silently, so clients can back off.
     - `/health` is deliberately unlimited so uptime checks are never throttled.
 8. `BASE_URL` is taken from the config file rather than the `Host` header, preventing host header injection.
-9. Submitted URLs are rejected if the host is a loopback, private, link-local, reserved, multicast or unspecified address, limiting the open-redirect surface. The check is parse-only, the server never fetches the URL to verify it, which would introduce an SSRF surface and only guarantee reachability at the moment of validation. 
+9. Submitted URLs are rejected if the host is a loopback, private, link-local, reserved, multicast or unspecified address,  limiting the open-redirect surface. The check is parse-only, the server never fetches the URL to verify it, which would introduce an SSRF surface and only guarantee reachability at the moment of validation. 
+10. The short code path parameter is constrained to its exact shape at the route, so a malformed code is rejected before it reaches a query. 
+11. Request body size — middleware rejects bodies over 64KB on Content-Length, before
+    routing and before the body is read into the application. 
 
 ## Testing
 

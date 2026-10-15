@@ -1,10 +1,11 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pathlib import Path
+from typing import Literal
 
 class Settings(BaseSettings):
-    SECRET_KEY: str
-    ALGORITHM: str
+    SECRET_KEY: str = Field(min_length=32)
+    ALGORITHM: Literal["HS256"] = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     DATABASE_URL:str
     BASE_URL:str

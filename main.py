@@ -102,12 +102,10 @@ def get_current_user(token:Annotated[str,Depends(oauth2_scheme)], session: Sessi
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms= [settings.ALGORITHM])
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms= [settings.ALGORITHM], options={"require": ["exp", "sub"]})
     except InvalidTokenError:
         raise credentials_exception
     email = payload.get("sub")
-    if email is None:
-        raise credentials_exception
     token_data = TokenData(email=email)
     user=get_user(token_data.email, session)
     if user is None:
