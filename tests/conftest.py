@@ -40,3 +40,14 @@ def auth_header_fixture(client: TestClient, test_user):
     response = client.post("/auth/login", data=login_data)
     assert response.status_code == 200
     return { "Authorization": f"Bearer {response.json()['access_token']}" }
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "ratelimit: run this test with the rate limiter switched on")
+
+@pytest.fixture(name="rate_limiter", autouse=True)
+def rate_limiter_fixture(request):
+    limiter.reset()
+    limiter.enabled = request.node.get_closest_marker("ratelimit") is not None
+    yield
+    limiter.reset()
+    limiter.enabled = True
