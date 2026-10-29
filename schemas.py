@@ -10,7 +10,7 @@ class UserBase(SQLModel):
      email: EmailStr = Field(index=True, unique=True)
 
 class UserRequest(UserBase):
-     password: str = Field(min_length=8, max_length=100)
+     password: str = Field(min_length=8, max_length=120)
 
 
 class UserTable(UserBase, table=True):

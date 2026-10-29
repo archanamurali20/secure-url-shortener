@@ -34,7 +34,9 @@ Note: The first request may take up to a minute as the app and the database wake
 1.  Clone the repo
 2. Create the venv : `python -m venv venv`
 3. Activate the venv - Windows(Powershell)  `venv\Scripts\Activate.ps1`
-4. Install the requirements :  `pip install -r requirements.txt`
+4. Install the dependencies:
+   - To run the app and the tests: pip install -r requirements-dev.txt
+   - To run the app only: pip install -r requirements.txt
 5. To create the database replace the password value - `docker run --name pg -e POSTGRES_PASSWORD=yourpassword -e POSTGRES_DB=urlshortener -p 5432:5432 -d postgres`
 6. For the test database `docker exec -it pg psql -U postgres -c "CREATE DATABASE urlshortener_test;"`
 7. Copy `.env.example` to `.env` and generate the `SECRET_KEY`, `DATABASE_URL` , `BASE_URL` and the `TEST_DATABASE_URL`
