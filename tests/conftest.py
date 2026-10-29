@@ -6,6 +6,8 @@ from main import app, get_session, limiter
 from config import settings
 @pytest.fixture(name="session")
 def session_fixture():
+    if not settings.TEST_DATABASE_URL:
+        pytest.fail("TEST_DATABASE_URL is not set. Add it to .env (see README, How to run it?).", pytrace=False)
     test_engine = create_engine(settings.TEST_DATABASE_URL)
     SQLModel.metadata.create_all(test_engine)
     with Session(test_engine) as session:
@@ -20,12 +22,6 @@ def client_fixture(session:Session):
     client = TestClient(app)
     yield client
     app.dependency_overrides.clear()
-
-@pytest.fixture(name="rate_limiter", autouse=True)
-def rate_limiter_fixture():
-    limiter.enabled = False
-    yield
-    limiter.enabled = True
 
 @pytest.fixture(name="test_user")
 def test_user_fixture(client: TestClient):

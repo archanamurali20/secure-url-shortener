@@ -6,7 +6,7 @@ from sqlmodel import Field, SQLModel
 # User Table
 
 class UserBase(SQLModel):
-     name: str = Field(index=True, max_length=100)
+     name: str = Field(max_length=100)
      email: EmailStr = Field(index=True, unique=True)
 
 class UserRequest(UserBase):

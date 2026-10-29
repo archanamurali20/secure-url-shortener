@@ -57,7 +57,7 @@ Note: The first request may take up to a minute as the app and the database wake
     - Per-user salts, so identical passwords produce different hashes and precomputed rainbow tables are useless.
     - Deliberately slow parameters — the cost per hash is negligible for one login but makes brute-forcing impractical.
     - The password hash is excluded from API responses by the response model.
-    - Length bounded at both ends, 8 to 128 (OWASP). This is enforced when a password is set and deliberately not at login, so raising the policy later cannever lock out an existing account.
+    - Length bounded at both ends, 8 to 128 (OWASP). This is enforced when a password is set and deliberately not at login, so raising the policy later can never lock out an existing account.
 5. Authentication
     - Signing key read from environment variables, never committed; `.env` gitignored with a `.env.example` documenting required config.
     - Token expiry (30 min) bounds the damage window if a token leaks. Decode requires exp and sub, so a token issued without an expiry is rejected rather than valid forever.
@@ -84,7 +84,7 @@ Note: The first request may take up to a minute as the app and the database wake
 
 ## Testing
 
-18 tests, 93% coverage on application modules. Run with `pytest -v`.
+28 tests, 95% coverage on application modules. Run with `pytest -v`.
 
 - Tests run against a separate PostgreSQL database with tables created and dropped per test, and the session dependency overridden so application code is exercised unmodified. Rate limiting is disabled via an autouse fixture.
 - Coverage targets the security decisions above - duplicate-email rejection, hash never returned in a response, cross-user delete returning 403 with the link surviving, owner-scoped listing, and rejection of loopback, private and link-local hosts.
@@ -96,3 +96,4 @@ Note: The first request may take up to a minute as the app and the database wake
 2. Short codes are bearer capabilities. Redirection is unauthenticated by design. This is why ownership failures return 403 rather than 404 as code existence is already public.
 3. Rate limiting is per-IP and in-memory, so it resets on restart and doesn't span instances. Behind a proxy the observed IP is the proxy's; using X-Forwarded-For requires knowing which proxies to trust, since clients can set it themselves.
 4. Open redirect - feature of url shortener. Can be mitigated by reputation checking, abuse reporting, blocklists etc.
+5. The 64KB body limit only checks `Content-Length`, so chunked requests bypass it and are processed in full. Fix: count bytes as the body streams in.
