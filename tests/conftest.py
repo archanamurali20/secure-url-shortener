@@ -6,6 +6,8 @@ from main import app, get_session, limiter
 from config import settings
 @pytest.fixture(name="session")
 def session_fixture():
+    if not settings.TEST_DATABASE_URL:
+        pytest.fail("TEST_DATABASE_URL is not set. Add it to .env (see README, How to run it?).", pytrace=False)
     test_engine = create_engine(settings.TEST_DATABASE_URL)
     SQLModel.metadata.create_all(test_engine)
     with Session(test_engine) as session:
@@ -21,12 +23,6 @@ def client_fixture(session:Session):
     yield client
     app.dependency_overrides.clear()
 
-@pytest.fixture(name="rate_limiter", autouse=True)
-def rate_limiter_fixture():
-    limiter.enabled = False
-    yield
-    limiter.enabled = True
-
 @pytest.fixture(name="test_user")
 def test_user_fixture(client: TestClient):
     user_data = {"name": "Test User", "email": "test@example.com", "password": "password123"}
@@ -40,3 +36,14 @@ def auth_header_fixture(client: TestClient, test_user):
     response = client.post("/auth/login", data=login_data)
     assert response.status_code == 200
     return { "Authorization": f"Bearer {response.json()['access_token']}" }
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "ratelimit: run this test with the rate limiter switched on")
+
+@pytest.fixture(name="rate_limiter", autouse=True)
+def rate_limiter_fixture(request):
+    limiter.reset()
+    limiter.enabled = request.node.get_closest_marker("ratelimit") is not None
+    yield
+    limiter.reset()
+    limiter.enabled = True

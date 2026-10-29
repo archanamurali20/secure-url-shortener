@@ -1,8 +1,8 @@
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timedelta, timezone
-from fastapi import Depends, FastAPI, HTTPException, status, Request
+from fastapi import Depends, FastAPI, HTTPException, Path, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from sqlmodel import SQLModel, Session, create_engine, select
 from schemas import (
     GetCode, UrlTable, UrlAPI,
@@ -48,7 +48,33 @@ def verify_password(password, hashed_password):
     return password_hash.verify(password, hashed_password)
 
 limiter = Limiter(key_func=get_remote_address)
-app=FastAPI(lifespan=createdb_and_tables)
+
+app = FastAPI(
+    title="Secure URL Shortener",
+    version="1.0.0",
+    description="A URL shortener built to practise secure backend development. Design decisions and known limitations are in the [README](https://github.com/archanamurali20/secure-url-shortener#readme).",
+    contact={"name": "Archana Muralikrishnan", "url": "https://github.com/archanamurali20"},
+    openapi_tags=[
+        {"name": "auth", "description": "Register and log in"},
+        {"name": "links", "description": "Create, list, follow and delete short links"},
+        {"name": "health", "description": "Service check"},
+    ],
+    lifespan=createdb_and_tables,
+)
+
+@app.middleware("http")
+async def limit_body_size(request: Request, call_next):
+    content_length = request.headers.get("Content-Length")
+    if content_length is None:
+        return await call_next(request)
+
+    if int(content_length) > settings.MAX_BODY_BYTES:
+        return JSONResponse(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            content={"detail": "Content too large"}
+            )  
+    return await call_next(request)
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -89,12 +115,10 @@ def get_current_user(token:Annotated[str,Depends(oauth2_scheme)], session: Sessi
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms= [settings.ALGORITHM])
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms= [settings.ALGORITHM], options={"require": ["exp", "sub"]})
     except InvalidTokenError:
         raise credentials_exception
     email = payload.get("sub")
-    if email is None:
-        raise credentials_exception
     token_data = TokenData(email=email)
     user=get_user(token_data.email, session)
     if user is None:
@@ -102,13 +126,13 @@ def get_current_user(token:Annotated[str,Depends(oauth2_scheme)], session: Sessi
     return user
 
 
-@app.get("/health")
+@app.get("/health", tags=["health"], summary="Health check")
 def get_health_check():
     return{
         "status":"ok"
     }
 
-@app.post("/links",response_model=GetCode)
+@app.post("/links",response_model=GetCode, tags=["links"], summary="Create a short link")
 @limiter.limit("10/minute")
 def assign_code(request :Request, long_url: UrlAPI, session: Session = Depends(get_session), current_user: UserTable = Depends(get_current_user)):   
     for _ in range(5):
@@ -125,16 +149,16 @@ def assign_code(request :Request, long_url: UrlAPI, session: Session = Depends(g
     )
 
 
-@app.get("/links/{code}", response_class=RedirectResponse, responses={404:{"description":"No Link exists for this code"}},status_code=status.HTTP_302_FOUND )  
+@app.get("/links/{code}", response_class=RedirectResponse, responses={404:{"description":"No Link exists for this code"}},status_code=status.HTTP_302_FOUND, tags=["links"], summary="Follow a short link")  
 @limiter.limit("50/minute") 
-def get_long_url(request :Request, code: str, session:Session=Depends(get_session)):
+def get_long_url(request :Request, code: str = Path(min_length=7, max_length=7, pattern="^[A-Za-z0-9]{7}$"), session:Session=Depends(get_session)):
     url_row=session.exec(select(UrlTable).where(UrlTable.code==code)).first()
     if url_row is None:
         raise HTTPException(status_code=404, detail= "Code Not Found")
     return RedirectResponse(url=str(url_row.long_url), status_code=status.HTTP_302_FOUND)
 
 #To add a new user to the database
-@app.post("/auth/register", response_model=UserBase)
+@app.post("/auth/register", response_model=UserBase, tags=["auth"], summary="Register")
 @limiter.limit("5/hour")
 def add_user(request: Request, user_input :UserRequest, session : Session=Depends(get_session)):
     new_user = UserTable.model_validate(user_input, update={'hashed_password': get_password_hash(user_input.password)})
@@ -148,7 +172,7 @@ def add_user(request: Request, user_input :UserRequest, session : Session=Depend
     return new_user
 
 #To check credentials and generate token
-@app.post("/auth/login")
+@app.post("/auth/login", tags=["auth"], summary="Log in and get a token")
 @limiter.limit("5/minute")
 def login_for_access_token(request: Request, form_data: Annotated[OAuth2PasswordRequestForm, Depends()], session : Session=Depends(get_session))->Token:
     user = authenticate_user(form_data.username,form_data.password,session)
@@ -163,9 +187,9 @@ def login_for_access_token(request: Request, form_data: Annotated[OAuth2Password
 
     return Token(access_token=access_token, token_type="bearer")
 
-@app.delete("/links/{code}", status_code=status.HTTP_204_NO_CONTENT)
+@app.delete("/links/{code}", status_code=status.HTTP_204_NO_CONTENT, tags=["links"], summary="Delete a link you own")
 @limiter.limit("30/minute")
-def delete_links(request : Request, code : str, session: Session=Depends(get_session), current_user : UserTable = Depends(get_current_user)):
+def delete_links(request : Request, code : str =  Path(min_length=7, max_length=7, pattern="^[A-Za-z0-9]{7}$"), session: Session=Depends(get_session), current_user : UserTable = Depends(get_current_user)):
     code_in_db = session.exec(select(UrlTable).where(UrlTable.code==code)).first()
     if code_in_db is None:
         raise HTTPException(
@@ -181,7 +205,7 @@ def delete_links(request : Request, code : str, session: Session=Depends(get_ses
     session.delete(code_in_db)
     session.commit()
 
-@app.get("/links", response_model=list[GetAllLinks])
+@app.get("/links", response_model=list[GetAllLinks], tags=["links"], summary="List all links you own")
 @limiter.limit("50/minute") 
 def get_all_links_for_current_user(request: Request, current_user: UserTable = Depends(get_current_user), session : Session = Depends(get_session)):
     all_links = session.exec(select(UrlTable).where(UrlTable.owner_id==current_user.id)).all()
