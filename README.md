@@ -57,7 +57,7 @@ Note: The first request may take up to a minute as the app and the database wake
     - Per-user salts, so identical passwords produce different hashes and precomputed rainbow tables are useless.
     - Deliberately slow parameters — the cost per hash is negligible for one login but makes brute-forcing impractical.
     - The password hash is excluded from API responses by the response model.
-    - Length bounded at both ends, 8 to 128 (OWASP). This is enforced when a password is set and deliberately not at login, so raising the policy later can never lock out an existing account.
+    - Length bounded at both ends, 8 to 120. This is enforced when a password is set and deliberately not at login, so raising the policy later can never lock out an existing account.
 5. Authentication
     - Signing key read from environment variables, never committed; `.env` gitignored with a `.env.example` documenting required config.
     - Token expiry (30 min) bounds the damage window if a token leaks. Decode requires exp and sub, so a token issued without an expiry is rejected rather than valid forever.
@@ -86,7 +86,8 @@ Note: The first request may take up to a minute as the app and the database wake
 
 28 tests, 95% coverage on application modules. Run with `pytest -v`.
 
-- Tests run against a separate PostgreSQL database with tables created and dropped per test, and the session dependency overridden so application code is exercised unmodified. Rate limiting is disabled via an autouse fixture.
+- Tests run against a separate PostgreSQL database with tables created and dropped per test, and the session dependency overridden so application code is exercised unmodified. Rate limiting is off by default and switched on for tests marked `ratelimit`.
+- Security tests cover tampered, `alg: none`, expired and no-`exp` tokens, 401 on every protected route, and the login 429. Each token test first checks that a valid token gets 200, so a 401 can only come from the tampering.
 - Coverage targets the security decisions above - duplicate-email rejection, hash never returned in a response, cross-user delete returning 403 with the link surviving, owner-scoped listing, and rejection of loopback, private and link-local hosts.
 - The enumeration test compares the wrong-password and unknown-email responses to each other rather than to a fixed string, so it verifies indistinguishability rather than wording.
 
